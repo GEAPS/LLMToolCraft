@@ -1,14 +1,15 @@
 from transitions import Machine
 import ollama
-from sm_utils import STATE_DESCRIPTIONS_DICT, SYSTEM_MESSAGE_TEMPLATE, extract_decision
+from sm_utils import STATE_DESCRIPTIONS_DICT, SYSTEM_MESSAGE_TEMPLATE, extract_trigger, get_tools_with_triggers
 
-def craft_call_llm(messages):
-    response = ollama.chat(
-            model='codellama:13b',
+def craft_call_llm(messages, tools=[]):
+    response_dict = ollama.chat(
+            model='llama3.1:8b',
             messages=messages,
-            options={'temperature': 0}
+            options={'temperature': 0},
+            tools=tools
         )
-    return response['message']['content']
+    return response_dict
 
 class ToolCraftingProcess:
     states = [
@@ -102,35 +103,36 @@ class ToolCraftingProcess:
             )
         else:
             formatted_prompt = state_info['prompt']
-        
-        if state_info['action_type'] == 'iteration':
-            response_format = "\n Response format should be STRICTLY be:" + state_info['response_format']
-        else:
-            response_format = "\n Respond with:" + state_info['response_format']
+
+        tools = get_tools_with_triggers(state_info['action_type'], self.get_available_judgements())
+        print(tools)
         
         full_user_message = system_message + "\n\nUser's message: " + user_message
         
-        print(system_message)
         # Add the new user message with state context
         messages.append({"role": "user", "content": full_user_message})
-        
+
         # Call LLM and get response
-        llm_response = craft_call_llm(messages)
-        print(llm_response)
+        response_dict = craft_call_llm(messages, tools)
+
         
         # Process the LLM's response based on the action type
         if state_info['action_type'] == 'classification':
-            decision = extract_decision(llm_response)
-            if decision in self.machine.get_triggers(self.state):
-                getattr(self, decision)()
+            trigger = response_dict['tool_calls'][0]['function']['arguments']['trigger']
+            trigger = extract_trigger(trigger)
+            if trigger in self.get_triggers():
+                # send the trigger.
+                getattr(self, trigger)()
+                # Need to call the function recursively to get the next system message.
+                # the message history is the same while transitioning to the next state.
+                return self.process_interaction(user_message, message_history)
             else:
                 raise ValueError(f"Invalid decision for current state: {decision}")
         else:
+            llm_response = response_dict['message']['content']
             # Process task-based states
             if self.state == 'requirement_proposal':
                 self.propose_design()
-            # elif self.state == 'design_proposal':
-            #     self.propose_design()
             elif self.state == 'refinement':
                 self.refined_design = llm_response
                 self.approve_design()
@@ -154,12 +156,11 @@ class ToolCraftingProcess:
                 self.complete()
 
         # Update message history
-        message_history.append({"role": "user", "content": full_user_message})
         message_history.append({"role": "assistant", "content": llm_response})
         
         return llm_response
         
-    def get_available_judgements(self):
+    def get_triggers(self):
             state = self.state  # Get the current state of the machine
             triggers = [t['trigger'] for t in self.transitions if t['source'] == state]  # Extract triggers for the current state
             return triggers

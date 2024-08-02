@@ -1,3 +1,28 @@
+def get_tools_with_triggers(action_type, available_triggers):
+    tools = []
+    if action_type == 'classification':
+        tools =  [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "send_trigger",
+                        "description": "Send the trigger to the state machine.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "trigger": {
+                                    "type": "string",
+                                    "description": f"The trigger to send. Possible values are: {', '.join(map(str, available_triggers))}",
+                                    "enum": available_triggers
+                                }
+                            },
+                            "required": ["trigger"]
+                        }
+                    }
+                }
+            ]
+        
+    return tools
 
 SYSTEM_MESSAGE_TEMPLATE = """
 You are part of a tool development process managed by a state machine. Your role is to assist in developing a tool based on user requirements. Follow these guidelines and adhere to the response format strictly:
@@ -32,7 +57,7 @@ STATE_DESCRIPTIONS_DICT = {
         "description": "Review the proposed design and decide to approve or refine.",
         "expected_behavior": "Evaluate the design against the requirements. Decide if it's satisfactory or needs refinement.",
         "action_type": "classification",
-        "response_format": "Respond ONLY with either 'approve_design' or 'refine_design'.",
+        "response_format": "Respond ONLY with either 'approve_design' or 'refine_design' in ['approve_design', 'refine_design'].",
         "prompt": "Review the proposed design. Consider the following:\n1. Does it meet all the requirements?\n2. Is it efficient and well-structured?\n3. Are there any potential issues or improvements?\nRespond ONLY with 'approve_design' if satisfied or 'refine_design' if changes are needed.",
         "available_actions": ["approve_design", "refine_design"]
     },
@@ -119,13 +144,15 @@ STATE_DESCRIPTIONS_DICT = {
     }
 }
 
-def extract_decision(response):
-    valid_decisions = [
+def extract_trigger(response):
+    valid_triggers = [
         'approve_design', 'refine_design', 'verify_results', 'iterate', 
         'decide', 'approve_tool', 'refine_tool', 'new_requirement', 'end'
     ]
     response = response.strip().lower()
-    if response in valid_decisions:
+    if response in valid_triggers:
         return response
     else:
-        raise ValueError(f"Invalid decision: {response}")
+        raise ValueError(f"Invalid trigger: {response}")
+
+      
