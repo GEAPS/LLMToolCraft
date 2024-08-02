@@ -1,6 +1,5 @@
 #!/bin/bash
 
-LOGFILE="/home/marginx/workspace/amd/capture_and_send_text.log"
 echo "Running capture_and_send_text.sh" > $LOGFILE
 
 # 使用xdotool捕获选中文本
