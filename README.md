@@ -4,7 +4,6 @@ This project is part of the [Pervasive AI Developer Contest](https://www.hackste
 
 **For the version prior to the submission deadline, please visit the `old` branch.**
 
-
 ## How to Run
 
 ### Clipboard Setup
@@ -22,11 +21,11 @@ This enables sending selected content to the Flask App and storing it in a Pytho
 ### Launch the Web App
 To start the application, run:
 
-```
+```bash
 python run.py
 ```
 
-It will run at `127..0.0.1:8000` by default.
+It will run at `http://127.0.0.1:8000` by default.
 
 ## Basic Interaction with LLM
 
@@ -93,50 +92,52 @@ flowchart TD
 ```
 
 ### States And Triggers
-The stata machine is implemented in `craft_sm.py` and `sm_utils.py`. The states are encoded as 11 different ones.
-        'requirement_proposal', 
-        'review', 
-        'refinement', 
-        'information_collection', 
-        'script_design', 
-        'verification', 
-        'iteration', 
-        'decision_point', 
-        'final_review', 
-        'completion', 
-        'end'
-The action type in each state can be classified into two types: `task` and `classification`. The state of `task` needs to perform certain task by the LLM while the `classification` task needs to decide the trigger from a limited set which is available to the current state. Each trigger corresponds to a individual transition among states. 
+The state machine is implemented in `craft_sm.py` and `sm_utils.py`. The states are encoded as 11 different ones:
 
-To predict one of the exact trigger from the given set, we leverage the [new feature](https://ollama.com/blog/tool-support) of ollama to make use of `tool` to make a function call to treat triggers as enum tye parameter for the agent to send to a virtual function called `send_trigger`. The tool is crafted as
+1. requirement_proposal
+2. review
+3. refinement
+4. information_collection
+5. script_design
+6. verification
+7. iteration
+8. decision_point
+9. final_review
+10. completion
+11. end
+
+
+The action type in each state can be classified into two types: `task` and `classification`. The state of `task` needs to perform certain task by the LLM while the `classification` task needs to decide the trigger from a limited set which is available to the current state. Each trigger corresponds to an individual transition among states. 
+
+To predict one of the exact trigger from the given set, we leverage the [new feature](https://ollama.com/blog/tool-support) of ollama to make use of `tool` to make a function call to treat triggers as enum type parameter for the agent to send to a virtual function called `send_trigger`. The tool is crafted as:
 
 ```python
 def get_tools_with_triggers(action_type, available_triggers):
     tools = []
     if action_type == 'classification':
-        tools =  [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "send_trigger",
-                        "description": "Send the trigger to the state machine.",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "trigger": {
-                                    "type": "string",
-                                    "description": f"The trigger to send. Possible values are: {', '.join(map(str, available_triggers))}",
-                                    "enum": available_triggers
-                                }
-                            },
-                            "required": ["trigger"]
-                        }
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_trigger",
+                    "description": "Send the trigger to the state machine.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "trigger": {
+                                "type": "string",
+                                "description": f"The trigger to send. Possible values are: {', '.join(map(str, available_triggers))}",
+                                "enum": available_triggers
+                            }
+                        },
+                        "required": ["trigger"]
                     }
                 }
-            ]
-        
+            }
+        ]
     return tools
-
 ```
+
 Then the `tools` are passed as a parameter to the `ollama.chat`, it will make the classification task by output the parameter in `response_dict['tool_calls'][0]['function']['arguments']['trigger']` where `response_dict` is returned by `ollama.chat`.
 
 ## Features to Add
@@ -151,4 +152,3 @@ Then the `tools` are passed as a parameter to the `ollama.chat`, it will make th
    - Prompt tools
    - Script tools
    - System tools
-
