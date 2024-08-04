@@ -42,69 +42,73 @@ For a demonstration of basic interaction, watch this video:
 
 A state machine guides the agent through a flowchart, ensuring the LLM follows the correct procedure to craft tools. This process can be enhanced with more powerful LLMs for smoother state transitions.
 
-### State Machine Design
+### State Machine Design [Updated]
 
-1. **User proposes requirement** (A)
-2. **LLM designs solution procedure** (B)
-3. **LLM provides expected results for specific inputs** (C)
-4. **User satisfied with design?** (D)
-   - No (E): User provides feedback, which is fed back into the design process (B)
-   - Yes (F): LLM requests necessary details (F)
-5. **All details provided?** (G)
-   - No (F): The design process continues with new information provided (F)
-   - Yes (H): LLM designs and tests the script (H)
-6. **LLM verifies results** (I)
-7. **Results satisfactory?** (J)
-   - No (K): Max iterations reached? (K)
-     - No: Iterate further (H)
-     - Yes: User wants to continue? (L)
-       - Yes (H): Continue iterating (H)
-       - No (M): End: Tool creation abandoned (M)
-   - Yes (N): User satisfied with final tool? (N)
-     - No (O): User provides feedback (O), which is fed back into the testing process (H)
-     - Yes (P): Store script in database (P), End: Tool created successfully (Q)
+1. **Requirement Proposal** (A): The process begins with the user proposing requirements for the tool.
+
+2. **Review** (B): The proposal is reviewed.
+   - If refinement is needed: Move to Proposal Refinement (C)
+   - If approved: Proceed to Script Design and Execution (D)
+
+3. **Proposal Refinement** (C): The initial proposal is refined based on feedback.
+   - After refinement: Return to Review (B)
+
+4. **Script Design and Execution** (D): The script is designed and executed based on the approved proposal.
+
+5. **Execution Evaluation** (E): The results of the script execution are evaluated.
+   - If results met expectations: Move to Finalize Success (F)
+   - If results did not meet expectations: Move to Script Analysis and Refinement (G)
+
+6. **Script Analysis and Refinement** (G): The script is analyzed and refined based on the evaluation.
+   - If max iterations not reached: Return to Script Design and Execution (D)
+   - If max iterations reached: Move to Finalize Timeup (H)
+
+7. **Finalize Success** (F) or **Finalize Timeup** (H): The process is finalized based on whether expectations were met or max iterations were reached.
+
+8. **Final Review** (I): A final review of the tool is conducted.
+   - If refinement is needed: Return to Script Design and Execution (D)
+   - If approved: Move to End (J)
+
+9. **End** (J): The tool crafting process is completed.
+   - To start a new project: Return to Requirement Proposal (A)
+
+Note: The green color of the Requirement Proposal (A) indicates the start of the process, while the red color of the End (J) signifies the completion of the process.
 
 ### State Machine Flowchart
 
 ```mermaid
 flowchart TD
-    A[User proposes requirement] --> B[LLM designs solution procedure]
-    B --> C[LLM provides expected results for specific inputs]
-    C --> D{User satisfied with design?}
-    D -->|No| E[User provides feedback]
-    E --> B
-    D -->|Yes| F[LLM requests necessary details]
-    F --> G{All details provided?}
-    G -->|No| F
-    G -->|Yes| H[LLM designs and tests script]
-    H --> I[LLM verifies results]
-    I --> J{Results satisfactory?}
-    J -->|No| K{Max iterations reached?}
-    K -->|No| H
-    K -->|Yes| L{User wants to continue?}
-    L -->|Yes| H
-    L -->|No| M[End: Tool creation abandoned]
-    J -->|Yes| N{User satisfied with final tool?}
-    N -->|No| O[User provides feedback]
-    O --> H
-    N -->|Yes| P[Store script in database]
-    P --> Q[End: Tool created successfully]
+    A[Requirement Proposal]:::startState --> B{Review}
+    B -->|Needs Refinement| C[Proposal Refinement]
+    C --> B
+    B -->|Approved| D[Script Design Execution]
+    D --> E{Execution<br>Evaluation}
+    E -->|Met Expectations| F[Finalize Success]
+    E -->|Not Met| G{Script Analysis <br>& Refinement}
+    G -->|Max Iterations Not Reached| D
+    G -->|Max Iterations Reached| H[Finalize Timeup]
+    F --> I{Final Review}
+    H --> I
+    I -->|Needs Refinement| D
+    I -->|Approved| J[End]:::endState
+    J -->|New Project| A
+    classDef startState fill:#9f6,stroke:#333,stroke-width:2px;
+    classDef endState fill:#f66,stroke:#333,stroke-width:2px;
 ```
 
 ### States And Triggers
-The state machine is implemented in `craft_sm.py` and `sm_utils.py`. The states are encoded as 11 different ones:
+The state machine is implemented in `craft_sm.py` and `sm_utils.py`. The states are encoded as 10 different ones:
 
 1. requirement_proposal
-2. review
-3. refinement
-4. information_collection
-5. script_design
-6. verification
-7. iteration
-8. decision_point
+2. review 
+3. proposal_refinement
+4. script_design_and_execution
+5. script_execution_evaluation
+6. script_analysis_and_refinement
+7. finalize_success
+8. finalize_timeup
 9. final_review
-10. completion
-11. end
+10. end
 
 
 The action type in each state can be classified into two types: `task` and `classification`. The state of `task` needs to perform certain task by the LLM while the `classification` task needs to decide the trigger from a limited set which is available to the current state. Each trigger corresponds to an individual transition among states. 
