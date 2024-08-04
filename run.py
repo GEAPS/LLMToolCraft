@@ -8,7 +8,7 @@ from craft import create_craft_blueprint
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'  # Replace 'your_secret_key' with a secure key
-socketio = SocketIO(app)
+socketio = SocketIO(app, ping_interval=25000, ping_timeout=60000)
 craft_bp = create_craft_blueprint(app, socketio)
 app.register_blueprint(craft_bp, url_prefix='/craft')
 

@@ -4,7 +4,7 @@ from sm_utils import STATE_DESCRIPTIONS_DICT, SYSTEM_MESSAGE_TEMPLATE, extract_t
 
 def craft_call_llm(messages, tools=[]):
     response_dict = ollama.chat(
-            model='llama3.1:8b',
+            model='llama3.1:70b',
             messages=messages,
             options={'temperature': 0},
             tools=tools
@@ -13,16 +13,15 @@ def craft_call_llm(messages, tools=[]):
 
 class ToolCraftingProcess:
     states = [
-        'requirement_proposal', 
+        'requirement_proposal',  # Includes information collection
         'review', 
-        'refinement', 
-        'information_collection', 
-        'script_design', 
-        'verification', 
-        'iteration', 
-        'decision_point', 
-        'final_review', 
-        'completion', 
+        'proposal_refinement',
+        'script_design_and_execution',
+        'script_execution_evaluation',
+        'script_analysis_and_refinement',
+        'finalize_success',
+        'finalize_timeup',
+        'final_review',
         'end'
     ]
 
@@ -31,38 +30,39 @@ class ToolCraftingProcess:
         self.iteration_count = 0
         self.message = self.init_message()
 
-
         self.transitions = [
             {'trigger': 'propose_design', 'source': 'requirement_proposal', 'dest': 'review'},
-            {'trigger': 'approve_design', 'source': 'review', 'dest': 'information_collection'},
-            {'trigger': 'refine_design', 'source': 'review', 'dest': 'refinement'},
-            {'trigger': 'approve_design', 'source': 'refinement', 'dest': 'information_collection'},
-            {'trigger': 'refine_design', 'source': 'refinement', 'dest': 'refinement'},
-            {'trigger': 'collect_information', 'source': 'information_collection', 'dest': 'script_design'},
-            {'trigger': 'test_script', 'source': 'script_design', 'dest': 'verification'},
-            {'trigger': 'verify_results', 'source': 'verification', 'dest': 'decision_point', 'conditions': 'results_met_expectations'},
-            {'trigger': 'verify_results', 'source': 'verification', 'dest': 'iteration', 'unless': 'results_met_expectations'},
-            {'trigger': 'iterate', 'source': 'iteration', 'dest': 'decision_point', 'conditions': ['results_met_expectations', 'max_iterations_reached']},
-            {'trigger': 'iterate', 'source': 'iteration', 'dest': 'script_design', 'unless': 'results_met_expectations'},
-            {'trigger': 'decide', 'source': 'decision_point', 'dest': 'final_review', 'conditions': 'finalize'},
-            {'trigger': 'decide', 'source': 'decision_point', 'dest': 'script_design', 'unless': 'finalize'},
-            {'trigger': 'approve_tool', 'source': 'final_review', 'dest': 'completion'},
-            {'trigger': 'refine_tool', 'source': 'final_review', 'dest': 'iteration'},
-            {'trigger': 'complete', 'source': 'completion', 'dest': 'end'},
-            {'trigger': 'new_requirement', 'source': 'end', 'dest': 'requirement_proposal'}
+            {'trigger': 'refine_design', 'source': 'review', 'dest': 'proposal_refinement'}, 
+            {'trigger': 'propose_refined_design', 'source': 'proposal_refinement', 'dest': 'review'}, 
+            {'trigger': 'implement_design', 'source': 'review', 'dest': 'script_design_and_execution'},
+            {'trigger': 'eval_script', 'source': 'script_design_and_execution', 'dest': 'script_execution_evaluation'},
+            {'trigger': 'results_met_expectations', 'source': 'script_execution_evaluation', 'dest': 'finalize_success'},
+            {'trigger': 'results_not_met_expectations', 'source': 'script_execution_evaluation', 'dest': 'script_analysis_and_refinement'},
+            {'trigger': 'iterate', 'source': 'script_analysis_and_refinement', 'dest': 'finalize_timeup', 'conditions': 'max_iterations_reached'},
+            {'trigger': 'iterate', 'source': 'script_analysis_and_refinement', 'dest': 'script_design_and_execution', 'unless': 'max_iterations_reached'},
+            {'trigger': 'summarize_development', 'source': 'finalize_success', 'dest': 'final_review'},
+            {'trigger': 'summarize_development', 'source': 'finalize_timeup', 'dest': 'final_review'},
+            {'trigger': 'refine_tool', 'source': 'final_review', 'dest': 'script_design_and_execution'},
+            {'trigger': 'end_tool_crafting', 'source': 'final_review', 'dest': 'end'},
+            {'trigger': 'new_project', 'source': 'end', 'dest': 'requirement_proposal'}
         ]
 
         # Initialize the state machine
         self.machine = Machine(model=self, states=ToolCraftingProcess.states, transitions=self.transitions, initial='requirement_proposal')
+        
+        self.evaluation_status = 'result_met_expectations'
 
 
 
-    def results_met_expectations(self):
+    def is_timeup_or_satisfactory(self):
         # Check if the results meet expectations
-        return True
+        return self.evaluation_status == 'result_met_expectations' or self.iteration_count >= self.max_iterations
 
     def max_iterations_reached(self):
         return self.iteration_count >= self.max_iterations
+
+    def clear_iteration_count(self):
+        self.iteration_count = 0
 
     def finalize(self):
         # Logic to finalize the tool
@@ -79,35 +79,34 @@ class ToolCraftingProcess:
         self.message = "What tool do you want to craft?"
 
     
+    def extract_and_save_scripts(self, llm_response):
+        # Extract the scripts from the LLM response.
+        # Save the scripts.
+        # Return the scripts.
+        pass
+        return "The scripts", "The execution commands"
+    
+    def execute_scripts(self, execution_commands):
+        # Execute the scripts.
+        # Return the outcome.
+        return "The execution's results: Beijing's temperature is 35 celcicus degree."
+
+    
     def process_interaction(self, user_message, message_history=[]):
         system_message = self.get_system_message()
         state_info = STATE_DESCRIPTIONS_DICT[self.state]
         
         # Construct messages for LLM
-        messages = [
-            # {"role": "system", "content": system_message}
-        ]
+        messages = [{"role": "system", "content": system_message}]
         
         # Add history
         messages.extend(message_history)
         
-        # Construct state-specific context and user message
-        # state_context = f"Current state: {self.state}\nTask: {state_info['description']}\n\n"
-        state_context = ""
-        
-        # Format the prompt if it's the iteration state
-        if self.state == 'iteration':
-            formatted_prompt = state_info['prompt'].format(
-                iteration_count=self.iteration_count,
-                max_iterations=self.max_iterations
-            )
-        else:
-            formatted_prompt = state_info['prompt']
-
-        tools = get_tools_with_triggers(state_info['action_type'], self.get_available_judgements())
+        tools = get_tools_with_triggers(state_info['action_type'], self.get_triggers())
         print(tools)
-        
-        full_user_message = system_message + "\n\nUser's message: " + user_message
+
+        # "\n\nUser's message: " + 
+        full_user_message = user_message
         
         # Add the new user message with state context
         messages.append({"role": "user", "content": full_user_message})
@@ -115,48 +114,57 @@ class ToolCraftingProcess:
         # Call LLM and get response
         response_dict = craft_call_llm(messages, tools)
 
-        
         # Process the LLM's response based on the action type
         if state_info['action_type'] == 'classification':
-            trigger = response_dict['tool_calls'][0]['function']['arguments']['trigger']
+            trigger = response_dict['message']['tool_calls'][0]['function']['arguments']['trigger']
             trigger = extract_trigger(trigger)
             if trigger in self.get_triggers():
-                # send the trigger.
+                # Execute the trigger
+                print(self.state, trigger)
                 getattr(self, trigger)()
-                # Need to call the function recursively to get the next system message.
-                # the message history is the same while transitioning to the next state.
+                # Recursively call to get the next system message
+                # If it is a classification task, the user_message will be passed to the next stage.
+                # For example, the feedback to the refinement.
                 return self.process_interaction(user_message, message_history)
             else:
-                raise ValueError(f"Invalid decision for current state: {decision}")
-        else:
+                raise ValueError(f"Invalid trigger for current state: {trigger}")
+        else:  # action_type is 'task'
             llm_response = response_dict['message']['content']
+            print("###################################", self.state, llm_response)
+
+            # Update message history
+            # The message history is only updated during 'task' action_type
+            message_history.append({"role": "user", "content": full_user_message})
+            message_history.append({"role": "assistant", "content": llm_response})
+                
             # Process task-based states
             if self.state == 'requirement_proposal':
                 self.propose_design()
-            elif self.state == 'refinement':
-                self.refined_design = llm_response
-                self.approve_design()
-            elif self.state == 'information_collection':
-                self.collected_info = llm_response
-                self.collect_information()
-            elif self.state == 'script_design':
-                self.script = llm_response
-                self.test_script()
-            elif self.state == 'iteration':
-                self.iteration_plan = llm_response
+            elif self.state == 'proposal_refinement':
+                self.propose_refined_design()
+            elif self.state == 'script_design_and_execution':
                 self.iteration_count += 1
-                if self.results_met_expectations() and self.max_iterations_reached():
-                    self.iterate()
-                elif not self.results_met_expectations():
-                    self.iterate()
-                else:
-                    raise ValueError("Unexpected state in iteration")
-            elif self.state == 'completion':
-                self.final_summary = llm_response
-                self.complete()
-
-        # Update message history
-        message_history.append({"role": "assistant", "content": llm_response})
+                # This will return the design.
+                scripts, execution_commands = self.extract_and_save_scripts(llm_response)
+                # This will execute the codes.
+                execution_outcome = self.execute_scripts(execution_commands)
+                # This will enter the scrip_execution_evaluation state, and no need to return to the user.
+                self.eval_script()
+                # This will enter the evaluation to decide the next state.
+                return self.process_interaction(execution_outcome, message_history)
+            elif self.state == 'script_analysis_and_refinement':
+                # This stage will make analysis based on the exection outcome followed by the evaluation state.
+                self.iterate()
+            elif self.state == 'finalize_success' or self.state == 'finalize_timeup':
+                # This state presents the user the summary of the experiment.
+                # Will go to the final review stage to see the user's sentiment based on the summary.
+                self.clear_iteration_count()
+                self.summarize_development()
+            elif self.state == 'end':
+                # This state is handled by classification, but included for completeness
+                pass
+            else:
+                raise ValueError(f"Unexpected state: {self.state}")
         
         return llm_response
         
@@ -166,7 +174,7 @@ class ToolCraftingProcess:
             return triggers
     
     def get_system_message(self):
-        available_actions = ', '.join(self.get_available_judgements())
+        available_actions = ', '.join(self.get_triggers())
         state_info = STATE_DESCRIPTIONS_DICT[self.state]
         
         return SYSTEM_MESSAGE_TEMPLATE.format(

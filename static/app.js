@@ -5,7 +5,11 @@ let clipboardQueue = [];
 let highLevelView = true;
 let craftToolHighLevelView = true;
 
-var socket = io();
+// var socket = io();
+const socket = io({
+  pingInterval: 25000,  // 25 seconds
+  pingTimeout: 60000    // 60 seconds
+});
 
 $(document).ready(function () {
   let accumulatedResponse = '';
@@ -76,12 +80,30 @@ $(document).ready(function () {
   
   socket.on('tool_response', function(data) {
     console.log("Received tool response:", data);
-    const markdownHtml = marked.parse(data.response);
-    $('#craft-response').html(markdownHtml);
-    $('#craft-state').text(data.state);
-  });
+    if (data) {
+        console.log("Response data:", data.response);
+        console.log("State data:", data.state);
+        const markdownHtml = marked.parse(data.response);
+        $('#craft-response').html(markdownHtml);
+        $('#craft-state').text(data.state);
+    } else {
+        console.log("No data received from socket event.");
+    }
+});
 
+  // Ensure socket.io connection is established
+  socket.on('disconnect', (reason) => {
+    console.log(`Disconnected: ${reason}`);
+    if (reason === 'io server disconnect') {
+        // The server disconnected the socket
+        socket.connect();  // Reconnect manually
+    }
+});
 
+socket.on('connect', () => {
+    console.log('Connected to server');
+    // Reinitialize necessary state or request missed updates
+});
 // function renderMarkdown(responseText) {
 //   const markdownHtml = marked.parse(responseText);
 //   $('#response').html(markdownHtml);
